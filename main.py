@@ -1,6 +1,7 @@
 # AUTH PROJECT APP
 from flask import Flask, request, make_response
 
+import cipher as cipher
 import status_code
 import user_database as user_db
 
@@ -17,6 +18,18 @@ def home():
 @app.route('/users/list')
 def users():
     # Fetch the users from the Database and send it in response
+    if not request.authorization:
+        return "Unauthenticated"
+    else:
+        if not key.authenticate(request.authorization):
+            return "Unauthenticated"
+        else:
+            print("Request is authorized.")
+    print(dir(request.authorization))
+    print(type(request.authorization))
+    if db.is_valid_user(request.authorization.username, request.authorization.password):
+        print("User is a valid user")
+
     user_list = db.list_users()
     #print(user_list)
     return user_list
@@ -27,12 +40,29 @@ def implement_create_users():
     # Check whether given username is already in the DB
     # If exists, send Error as User Exists in DB
     # Else create user and return success.
+    username = password = email = telephone = None
     if request.method == 'POST':
         data = request.json
-        user_record = (data.get('username'),
-                      data.get('password'),
-                       data.get('email'),
-                       data.get('telephone'))
+        if not len(data.keys()):
+            print("Need all the user record fields to create user")
+
+        if data.get("username"):
+            username = data['username']
+
+        if data.get("password"):
+            password = str(key.encrypt(data['password']))
+
+        if data.get("email"):
+            email = data['email']
+
+        if data.get('telephone'):
+            telephone = data['telephone']
+
+        user_record = (username,
+                       password,
+                       email,
+                       telephone)
+        print(user_record)
     result = db.create_user(user_record)
     if result == status_code.OPERATION_SUCCESS:
         return "User Created"
@@ -64,12 +94,24 @@ def implement_delete_users():
     # Check whether user exists in DB,
     # If exists, delete and send response
     # else send error as User doesnot exists.
-    pass
+    result = None
+    if request.method == 'DELETE':
+            username = request.json.get('username')
+            print(username)
+            print(type(username))
+            if username:
+                result = db.delete_user(username)
+
+    if result == status_code.OPERATION_SUCCESS:
+        return "User deleted"
+    else:
+        return "User delete failed"
 
 
 if __name__ == '__main__':
     #user = User()
     db = user_db.UserDB()
+    key = cipher.Authentication()
     app.run(debug=True)
 
 
