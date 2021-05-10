@@ -27,8 +27,15 @@ class UserDB():
     def __init__(self):
         # Connects to the Database, User_DB.db
         self.conn = sqlite3.connect("User_DB.db", check_same_thread=False)
+
+        # Initialize cipher for encryption
+        self.key = cipher.Authentication()
+        self.cipher_handle = self.key.get_instance()
+        print(self.cipher_handle)
+
         # Creates User Table.
         self.create_table()
+
         # Creates default user, admin
         self.create_admin_user()
 
@@ -42,9 +49,8 @@ class UserDB():
             self.conn.commit()
 
     def create_admin_user(self):
-        key = cipher.Authentication()
-        admin_password = str(key.encrypt(str(ADMIN_USER_VALUES.get('password'))))
-        ADMIN_USER_VALUES['password'] = admin_password
+        admin_password = self.cipher_handle.encrypt((ADMIN_USER_VALUES.get('password')))
+        ADMIN_USER_VALUES['password'] = str(admin_password)
         admin_user_record = (ADMIN_USER_VALUES.get('username'),
                              ADMIN_USER_VALUES.get('password'),
                              ADMIN_USER_VALUES.get('email'),
@@ -56,15 +62,15 @@ class UserDB():
         cursor = self.conn.cursor()
         # Check whether user record already exists
         if self.check_user_exists(user_record[0]):
-            return status_code.USER_ALREADY_EXISTS
+            return status_code.USER_ALREADY_EXISTS, "User already exists"
 
         # Add user record to the Database
         USER_RECORD = INSERT_USER_RECORD.format(user_record)
         try:
            cursor.execute(str(USER_RECORD))
-           status = status_code.OPERATION_SUCCESS
+           status = status_code.OPERATION_SUCCESS, "User Created successfully"
         except Exception as e:
-            print("User creation failed. %s" %e)
+            print("User creation failed. %s" %e), "Exceotion during User creation"
             status = status_code.INTERNAL_SERVER_ERROR
         finally:
             self.conn.commit()
@@ -85,21 +91,23 @@ class UserDB():
 
 
     def modify_user(self, username, password, email, telephone):
-        status = None
+        status = msg = None
         cursor = self.conn.cursor()
         # Check whether user record already exists
+        if username == 'admin':
+            return status_code.INTERNAL_SERVER_ERROR, "admin user cannot be modified."
+
         if not self.check_user_exists(username):
-            return status_code.USER_DOESNOT_EXISTS
+            return status_code.USER_DOESNOT_EXISTS, "User doesnot exists."
         try:
             cursor.execute(UPDATE_QUERY,(username, password, email, telephone, username))
-            status = status_code.OPERATION_SUCCESS
+            status, msg = status_code.OPERATION_SUCCESS, "User Record Updated successfully."
         except Exception as e:
             print("Exception during user modification. %s" % e)
-            status = status_code.INTERNAL_SERVER_ERROR
+            status, msg = status_code.INTERNAL_SERVER_ERROR, "Exception during User Update."
         finally:
             self.conn.commit()
-            #self.conn.close()
-            return status
+            return status, msg
 
 
     def delete_user(self, username):
@@ -132,19 +140,5 @@ class UserDB():
         except Exception as e:
             print("Exception during DB query. %s" % e)
             raise Exception
-
-    def is_valid_user(self, username, password):
-        cursor = self.conn.cursor()
-        key = cipher.Authentication()
-        encrypted_password = str(key.encrypt(password))
-        print(encrypted_password)
-        try:
-            user = cursor.execute(AUTH_USER_PASS, (username, )).fetchall()
-            print(user)
-        except Exception as e:
-            print("Unable to validate username and password. %s" % e)
-        finally:
-            return True
-
 
 

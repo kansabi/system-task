@@ -1,7 +1,7 @@
 # AUTH PROJECT APP
 from flask import Flask, request, make_response
 
-import cipher as cipher
+from cipher import Authentication
 import status_code
 import user_database as user_db
 
@@ -12,27 +12,14 @@ app = Flask(__name__)
 @app.route('/')
 @app.route('/home')
 def home():
-        return "<h1>WELCOME TO AUTH PROJECT<h1>"
+        return "<h1>WELCOME TO USERS PROJECT<h1>"
 
 # API endpoint to list users.
 @app.route('/users/list')
 def users():
     # Fetch the users from the Database and send it in response
-    if not request.authorization:
-        return "Unauthenticated"
-    else:
-        if not key.authenticate(request.authorization):
-            return "Unauthenticated"
-        else:
-            print("Request is authorized.")
-    print(dir(request.authorization))
-    print(type(request.authorization))
-    if db.is_valid_user(request.authorization.username, request.authorization.password):
-        print("User is a valid user")
-
     user_list = db.list_users()
-    #print(user_list)
-    return user_list
+    return user_list, 200
 
 # API endpoint to create a user record.
 @app.route('/users', methods = ['POST'])
@@ -43,14 +30,14 @@ def implement_create_users():
     username = password = email = telephone = None
     if request.method == 'POST':
         data = request.json
-        if not len(data.keys()):
-            print("Need all the user record fields to create user")
+        if len(data.keys()) < status_code.USER_RECORD_LENGTH:
+            return "Need all the user record fields to create user", 403
 
         if data.get("username"):
             username = data['username']
 
         if data.get("password"):
-            password = str(key.encrypt(data['password']))
+            password = str(cipher_handle.encrypt(data['password']))
 
         if data.get("email"):
             email = data['email']
@@ -62,12 +49,12 @@ def implement_create_users():
                        password,
                        email,
                        telephone)
-        print(user_record)
-    result = db.create_user(user_record)
+
+    result, msg = db.create_user(user_record)
     if result == status_code.OPERATION_SUCCESS:
-        return "User Created"
+        return msg, 200
     else:
-        return "User Creation failed"
+        return msg, 422
 
 
 # API endpoint to modify a user record.
@@ -76,45 +63,62 @@ def implement_modify_users():
     # Check whether user exists in the DB
     # If exists, proceed with Update and send response
     # else send Error as No user with such username
+    username = password = email = telephone = None
     if request.method == 'PUT':
         data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    email = data.get('email')
-    telephone = data.get('telephone')
-    result = db.modify_user(username, password, email, telephone)
+        if not len(data.keys()):
+            return "Please provide values to update User Record", 403
+
+        if data.get("username", ""):
+            username = data['username']
+
+        if data.get("password", ""):
+            password = cipher_handle.encrypt(data['password'])
+
+        if data.get("email", ""):
+            email = data['email']
+
+        if data.get('telephone', ""):
+            telephone = data['telephone']
+
+        if not len(username):
+            return "Username is mandatory to update the User Record", 403
+
+    result, msg= db.modify_user(username, password, email, telephone)
     if result == status_code.OPERATION_SUCCESS:
-        return "User Modified"
+        return msg, 200
     else:
-        return "User Modification failed"
+        return msg, result
 
 # API endpoint to delete a user record.
 @app.route('/users', methods = ['DELETE'])
 def implement_delete_users():
     # Check whether user exists in DB,
     # If exists, delete and send response
-    # else send error as User doesnot exists.
-    result = None
+    # else send error as User doesn't exists.
     if request.method == 'DELETE':
-            username = request.json.get('username')
-            print(username)
-            print(type(username))
-            if username:
-                result = db.delete_user(username)
+        data = request.json
+        if not len(data.keys()):
+            return "Please provide username to delete user record", 403
+
+        if data.get("username"):
+            username = data['username']
+
+        if not username:
+            return "Username is mandatory to update the User Record", 403
+
+    result = db.delete_user(username)
 
     if result == status_code.OPERATION_SUCCESS:
-        return "User deleted"
+        return "User deleted.", 200
     else:
-        return "User delete failed"
+        return "User delete failed", 422
 
 
 if __name__ == '__main__':
-    #user = User()
+    # Initialize DB to store user record
     db = user_db.UserDB()
-    key = cipher.Authentication()
-    app.run(debug=True)
+    # Creating Singleton instance for encryption key
+    cipher_handle = Authentication.get_instance()
 
-
-
-
-#
+    app.run(host='0.0.0.0')
