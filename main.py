@@ -1,4 +1,4 @@
-# AUTH PROJECT APP
+# USER PROJECT APP
 from flask import Flask, request, make_response
 
 from cipher import Authentication
